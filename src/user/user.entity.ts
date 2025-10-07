@@ -19,7 +19,7 @@ export class User {
   role: string;
 
   @Column({ name: 'refresh_token', nullable: true, type: 'varchar', length: 255 })
-  refreshToken?: string;
+  refreshToken?: string | null;
 
   //Automatically set when user is created
   @CreateDateColumn({ name: 'created_at' })

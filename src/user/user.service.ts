@@ -180,4 +180,16 @@ export class UserService {
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
+
+  /******************************* USER LOGOUT *******************************/
+
+  async logout(userId: number): Promise<{ message: string }> {
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    await this.userRepository.update(userId, { refreshToken: null })
+    return { message: 'Logout successful' };
+  }
 }

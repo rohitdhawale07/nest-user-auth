@@ -59,4 +59,12 @@ export class UserController {
   async refreshToken(@Body('refreshToken') refreshToken: string) {
     return this.userService.refreshToken(refreshToken);
   }
+
+  //****************User Logout******************//
+
+  @UseGuards(JwtAuthGuard)
+  @Post('logout')
+  async logout(@Req() req) {
+    return this.userService.logout(req.user.userId);
+  }
 }
