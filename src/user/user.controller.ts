@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards, Get, Req } from '@nestjs/common';
+import { Body, Controller, Post, UseGuards, Get, Req, Query } from '@nestjs/common';
 import { UserService } from './user.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -10,15 +10,21 @@ import { Roles } from 'src/auth/roles.decorator';
 export class UserController {
   constructor(private readonly userService: UserService) { }
 
+  //***************User Registration*****************//
+
   @Post('register')
   async register(@Body() registerDto: RegisterDto) {
     return this.userService.register(registerDto.name, registerDto.email, registerDto.password);
   }
 
+  //****************User Login***********************//
+
   @Post('login')
   async login(@Body() loginDto: LoginDto) {
     return this.userService.login(loginDto.email, loginDto.password);
   }
+
+  //****************Get User Profile******************//
 
   @UseGuards(JwtAuthGuard)
   @Get('profile')
@@ -26,12 +32,28 @@ export class UserController {
     return this.userService.getProfile(req.user);
   }
 
+  //************Get All Users (Admin Only)**************//
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Get('all')
-  async getAllUsers() {
-    return this.userService.getAllUsers();
+  async getAllUsers(
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+    @Query('sort') sort = 'createdAt',
+    @Query('order') order: 'ASC' | 'DESC' = 'ASC',
+    @Query('search') search: string,
+  ) {
+    return this.userService.getAllUsers({
+      page: Number(page),
+      limit: Number(limit),
+      sort,
+      order: (String(order).toUpperCase() === 'DESC' ? 'DESC' : 'ASC') as 'ASC' | 'DESC',
+      search,
+    });
   }
+
+  //****************Refresh Token******************//
 
   @Post('refresh')
   async refreshToken(@Body('refreshToken') refreshToken: string) {

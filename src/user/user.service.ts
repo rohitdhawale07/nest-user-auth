@@ -5,6 +5,7 @@ import * as bcrypt from 'bcrypt';
 import { User } from './user.entity';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { paginateAndSearch } from 'src/common/utils/pagination.util';
 
 export interface LoginResponse {
   message: string;
@@ -109,15 +110,33 @@ export class UserService {
 
   /**************************** GET ALL USERS (Admin) ****************************/
 
-  async getAllUsers(): Promise<{ message: String, user: Object }> {
-    const users = await this.userRepository.find({
-      select: ['id', 'name', 'email', 'role', 'createdAt', 'updatedAt'] // exclude password
-    });
-    return {
-      message: 'Users fetched successfully',
-      user: users,
-    };
+  async getAllUsers(options: {
+    page?: number;
+    limit?: number;
+    sort?: string;
+    order?: 'ASC' | 'DESC';
+    search?: string;
+  }) {
+    try {
+      const query = this.userRepository.createQueryBuilder('user');
+
+      // Call the global pagination utility
+      const result = await paginateAndSearch(query, {
+        page: options.page,
+        limit: options.limit,
+        sort: options.sort,
+        order: options.order,
+        search: options.search,
+        searchableColumns: ['name', 'email', 'role'], // dynamic search across multiple fields
+      });
+
+      return result;
+    } catch (error) {
+      throw new UnauthorizedException('Failed to fetch users');
+    }
   }
+
+  /***************************** REFRESH TOKEN JWT *****************************/
 
   async refreshToken(token: string) {
     try {
