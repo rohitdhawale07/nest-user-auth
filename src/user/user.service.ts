@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from './user.entity';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 export interface LoginResponse {
   message: string;
@@ -11,16 +12,19 @@ export interface LoginResponse {
     id: number;
     name: string;
     email: string;
-    token: string;
   };
+  accessToken: string;
+  refreshToken: string;
 }
 
 @Injectable()
 export class UserService {
+  private readonly logger = new Logger(UserService.name);
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
   ) { }
 
   /********************************** REGISTER **********************************/
@@ -51,24 +55,28 @@ export class UserService {
   /************************************ LOGIN ***********************************/
 
   // Return token object on success
-  async login(email: string, password: string): Promise<LoginResponse> {
-
-    //fetch user from DB
+  async login(email: string, password: string) {
     const user = await this.userRepository.findOne({ where: { email } });
-    if (!user) {
-      throw new UnauthorizedException('Invalid email or password');
-    }
+    if (!user) throw new UnauthorizedException('Invalid email or password');
 
-    //compare password
     const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) throw new UnauthorizedException('Invalid email or password');
 
-    if (!isMatch) {
-      throw new UnauthorizedException('Invalid email or password');
-    }
-
-    //sign JWT
     const payload = { sub: user.id, email: user.email, role: user.role };
-    const token = this.jwtService.sign(payload);
+
+    //Use ConfigService for both secrets
+    const accessToken = this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('JWT_SECRET'),
+      expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') || '1h',
+    });
+
+    const refreshToken = this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d',
+    });
+
+    const hashedRefresh = await bcrypt.hash(refreshToken, 10);
+    await this.userRepository.update(user.id, { refreshToken: hashedRefresh });
 
     return {
       message: 'Login successful',
@@ -76,8 +84,9 @@ export class UserService {
         id: user.id,
         name: user.name,
         email: user.email,
-        token,
       },
+      accessToken,
+      refreshToken,
     };
   }
 
@@ -108,5 +117,48 @@ export class UserService {
       message: 'Users fetched successfully',
       user: users,
     };
+  }
+
+  async refreshToken(token: string) {
+    try {
+      this.logger.log(`Verifying refresh token: ${token}`);
+      const decoded = this.jwtService.verify(token, {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      });
+      this.logger.log(`Decoded refresh token: ${JSON.stringify(decoded)}`);
+
+      const user = await this.userRepository.findOne({ where: { id: decoded.sub } });
+      if (!user || !user.refreshToken) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      const isMatch = await bcrypt.compare(token, user.refreshToken);
+      if (!isMatch) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      const payload = { sub: user.id, email: user.email, role: user.role };
+
+      const newAccessToken = this.jwtService.sign(payload, {
+        secret: this.configService.get<string>('JWT_SECRET'),
+        expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') || '1h',
+      });
+
+      const newRefreshToken = this.jwtService.sign(payload, {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+        expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d',
+      });
+
+      const hashedRefresh = await bcrypt.hash(newRefreshToken, 10);
+      await this.userRepository.update(user.id, { refreshToken: hashedRefresh });
+
+      return {
+        message: 'Token refreshed successfully',
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+      };
+    } catch (err) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
   }
 }

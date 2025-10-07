@@ -32,4 +32,9 @@ export class UserController {
   async getAllUsers() {
     return this.userService.getAllUsers();
   }
+
+  @Post('refresh')
+  async refreshToken(@Body('refreshToken') refreshToken: string) {
+    return this.userService.refreshToken(refreshToken);
+  }
 }
