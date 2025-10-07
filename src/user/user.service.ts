@@ -7,22 +7,23 @@ import { JwtService } from '@nestjs/jwt';
 
 export interface LoginResponse {
   message: string;
-  token: string;
   user: {
     id: number;
     name: string;
     email: string;
+    token: string;
   };
 }
 
 @Injectable()
 export class UserService {
-  private readonly logger = new Logger(UserService.name);
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly jwtService: JwtService,
   ) { }
+
+  /********************************** REGISTER **********************************/
 
   async register(name: string, email: string, password: string): Promise<User> {
     // Check if user already exists
@@ -45,6 +46,8 @@ export class UserService {
 
     return this.userRepository.save(user);
   }
+
+  /************************************ LOGIN ***********************************/
 
   // Return token object on success
   async login(email: string, password: string): Promise<LoginResponse> {
@@ -72,8 +75,25 @@ export class UserService {
         id: user.id,
         name: user.name,
         email: user.email,
+        token,
       },
-      token
+    };
+  }
+
+  /********************************* GET PROFILE *********************************/
+
+  async getProfile(user: any): Promise<{ message: String, user: Object }> {
+    const foundUser = await this.userRepository.findOne({
+      where: { id: user.userId },
+      select: ['id', 'name', 'email', 'createdAt', 'updatedAt'] // exclude password
+    },
+    );
+    if (!foundUser) {
+      throw new UnauthorizedException('User not found');
+    }
+    return {
+      message: 'Profile fetched successfully',
+      user: foundUser,
     };
   }
 }
