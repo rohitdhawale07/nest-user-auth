@@ -1,10 +1,12 @@
-import { Body, Controller, Post, UseGuards, Get, Req, Query } from '@nestjs/common';
+import { Body, Controller, Post, UseGuards, Get, Req, Query, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { UserService } from './user.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/roles.guard';
 import { Roles } from 'src/auth/roles.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { multerConfig } from 'src/config/multer.config';
 
 @Controller('user')
 export class UserController {
@@ -66,5 +68,17 @@ export class UserController {
   @Post('logout')
   async logout(@Req() req) {
     return this.userService.logout(req.user.userId);
+  }
+
+  //*********** Upload profile picture***********//
+
+  @UseGuards(JwtAuthGuard)
+  @Post('upload-profile')
+  @UseInterceptors(FileInterceptor('file', multerConfig))
+  async uploadProfile(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req,
+  ) {
+    return this.userService.uploadProfile(req.user, file, req);
   }
 }

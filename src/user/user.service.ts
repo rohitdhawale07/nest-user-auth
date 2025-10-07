@@ -68,7 +68,7 @@ export class UserService {
     //Use ConfigService for both secrets
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('JWT_SECRET'),
-      expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') || '1h',
+      expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') || '1d',
     });
 
     const refreshToken = this.jwtService.sign(payload, {
@@ -191,5 +191,29 @@ export class UserService {
     }
     await this.userRepository.update(userId, { refreshToken: null })
     return { message: 'Logout successful' };
+  }
+
+  /************************* UPLOAD PROFILE PICTURE *************************/
+
+  async uploadProfile(user: any, file: Express.Multer.File, req: any) {
+    if (!file) {
+      throw new UnauthorizedException('No file uploaded');
+    }
+
+    const userToUpdate = await this.userRepository.findOne({ where: { id: user.userId } });
+    if (!userToUpdate) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const profileImagePath = file.path; // Store the file path or URL
+
+    await this.userRepository.update(user.userId, { profileImage: profileImagePath });
+
+    const imageUrl = `${req.protocol}://${req.get('host')}/${file.path.replace(/\\/g, '/')}`;
+
+    return {
+      message: 'Profile picture uploaded successfully',
+      profileImage: imageUrl,
+    };
   }
 }
