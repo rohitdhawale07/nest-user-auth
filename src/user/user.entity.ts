@@ -15,6 +15,9 @@ export class User {
   @Column()
   password: string;
 
+  @Column({ default: 'user' })
+  role: string;
+
   //Automatically set when user is created
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

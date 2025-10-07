@@ -42,6 +42,7 @@ export class UserService {
       name,
       email,
       password: hashedPassword,
+      role: 'user', // default role
     });
 
     return this.userRepository.save(user);
@@ -66,7 +67,7 @@ export class UserService {
     }
 
     //sign JWT
-    const payload = { sub: user.id, email: user.email };
+    const payload = { sub: user.id, email: user.email, role: user.role };
     const token = this.jwtService.sign(payload);
 
     return {
@@ -94,6 +95,18 @@ export class UserService {
     return {
       message: 'Profile fetched successfully',
       user: foundUser,
+    };
+  }
+
+  /**************************** GET ALL USERS (Admin) ****************************/
+
+  async getAllUsers(): Promise<{ message: String, user: Object }> {
+    const users = await this.userRepository.find({
+      select: ['id', 'name', 'email', 'role', 'createdAt', 'updatedAt'] // exclude password
+    });
+    return {
+      message: 'Users fetched successfully',
+      user: users,
     };
   }
 }

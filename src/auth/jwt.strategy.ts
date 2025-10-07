@@ -16,6 +16,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     async validate(payload: any) {
         // this function runs automatically if JWT is valid
         // payload = what you signed earlier in jwtService.sign(payload)
-        return { userId: payload.sub, email: payload.email };
+        return { userId: payload.sub, email: payload.email, role: payload.role }; // appended to request object as req.user
     }
 }
