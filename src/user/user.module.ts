@@ -6,6 +6,7 @@ import { UserController } from './user.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from 'src/auth/auth.module';
+import { CacheClientModule } from 'src/common/modules/cache-client.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { AuthModule } from 'src/auth/auth.module';
       isGlobal: true,
     }),
     TypeOrmModule.forFeature([User]),
+    CacheClientModule,
 
     JwtModule.registerAsync({
       imports: [ConfigModule],

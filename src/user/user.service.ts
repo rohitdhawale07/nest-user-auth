@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, ConflictException, Logger, UnauthorizedException, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -6,6 +6,8 @@ import { User } from './user.entity';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { paginateAndSearch } from 'src/common/utils/pagination.util';
+import { ClientProxy } from '@nestjs/microservices';
+import { catchError, firstValueFrom, of, timeout } from 'rxjs';
 
 export interface LoginResponse {
   message: string;
@@ -22,6 +24,7 @@ export interface LoginResponse {
 export class UserService {
   private readonly logger = new Logger(UserService.name);
   constructor(
+    @Inject('CACHE_SERVICE') private readonly cacheClient: ClientProxy,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly jwtService: JwtService,
@@ -118,23 +121,59 @@ export class UserService {
     search?: string;
   }) {
     try {
-      const query = this.userRepository.createQueryBuilder('user');
+      const cacheKey = `users_${options.page}_${options.limit}_${options.sort}_${options.order}_${options.search || 'all'}`;
 
-      // Call the global pagination utility
+      let cachedData = null;
+
+      try {
+        cachedData = await firstValueFrom(
+          this.cacheClient.send({ cmd: 'get_cache' }, cacheKey).pipe(
+            // Set a timeout for the cache response
+            // If cache service is down or slow, we won't wait indefinitely
+            // This requires rxjs/operators to be imported if not already
+            // e.g., import { timeout } from 'rxjs/operators';
+            // timeout(500), // 500ms timeout
+            timeout(500), // 500ms timeout
+            catchError(() => of(null)),
+          ));
+      } catch (err) {
+        console.warn('Cache service unavailable. Proceeding without cache:', err.message);
+      }
+
+      if (cachedData) {
+        console.log(`--- Fetching from CACHE for key: ${cacheKey}`);
+        return cachedData;
+      }
+
+      console.log(`--- Fetching from DB for key: ${cacheKey}`);
+      const query = this.userRepository.createQueryBuilder('user');
       const result = await paginateAndSearch(query, {
         page: options.page,
         limit: options.limit,
         sort: options.sort,
         order: options.order,
         search: options.search,
-        searchableColumns: ['name', 'email', 'role'], // dynamic search across multiple fields
+        searchableColumns: ['name', 'email', 'role'],
       });
+
+      // Try to cache result, but don't break if cache service is down
+      try {
+        await firstValueFrom(
+          this.cacheClient.send(
+            { cmd: 'set_cache' },
+            { key: cacheKey, value: result, ttl: 60 },
+          ),
+        );
+      } catch (err) {
+        console.warn(' Could not store in cache:', err.message);
+      }
 
       return result;
     } catch (error) {
       throw new UnauthorizedException('Failed to fetch users');
     }
   }
+
 
   /***************************** REFRESH TOKEN JWT *****************************/
 
